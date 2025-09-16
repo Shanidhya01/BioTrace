@@ -1,0 +1,21 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+.glass-table {
+  background: rgba(255, 255, 255, 0.01); /* ultra-light transparency */
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1); /* very subtle border */
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.1); /* very soft shadow */
+  transition: all 0.3s ease;
+}
+
+.glass-table:hover {
+  box-shadow: 0 4px 18px rgba(59, 130, 246, 0.15);
+  background: rgba(255, 255, 255, 0.07); /* slightly brighter on hover */
+}
+

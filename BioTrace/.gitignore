@@ -1,0 +1,11 @@
+# Virtual environment
+.venv/
+env/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+
+node_modules/
+.env
