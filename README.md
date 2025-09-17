@@ -302,12 +302,6 @@ npm run dev
 
 ---
 
-## Notes on BioTrace/
-
-Contains an older copy of both backend and frontend. Use root apps unless comparing or migrating.
-
----
-
 ## License
 
 Add a LICENSE file (MIT/Apache-2.0 recommended).
