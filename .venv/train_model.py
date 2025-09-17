@@ -216,7 +216,7 @@ def train_csv_incremental(csv_files, model_dir='processed_data', batch_size=1000
 
 # ================= Main =================
 if __name__ == "__main__":
-    csv_files = ["data/fasta_parsed.csv"]  # Replace with your actual 5K sequences CSV
+    csv_files = ["data/merged_filtered_sequences.csv"]  # Replace with your actual 5K sequences CSV
     if not os.path.exists(csv_files[0]):
         logger.info("📝 Creating sample CSV with 5000 sequences...")
         os.makedirs("data", exist_ok=True)

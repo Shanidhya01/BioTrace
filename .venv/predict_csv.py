@@ -31,15 +31,16 @@ class eDNAPreprocessor:
         self.known_labels = None
         self.feature_extractor_params = None
         self.known_features = None
-        self.training_data_df = None  # Store the original training data
+        self.training_data_df = None
+        self.sequence_hash_dict = None  # {hash(sequence): species}
 
     def load(self, input_dir=None, training_csv_path=None):
         if input_dir is None or input_dir == "processed_data":
-            # ✅ Always point to your actual processed_data folder
             input_dir = Path("C:/Users/loq/OneDrive/Desktop/SIH/processed_data")
         else:
             input_dir = Path(input_dir)
 
+        # Load preprocessors
         with open(input_dir / "scaler.pkl", "rb") as f:
             self.scaler = pickle.load(f)
         with open(input_dir / "label_encoder.pkl", "rb") as f:
@@ -54,24 +55,29 @@ class eDNAPreprocessor:
             self.feature_extractor_params = pickle.load(f)
 
         
-        # Load the original training data CSV for direct lookup
+        # Load training CSV and build hash dictionary
         if training_csv_path and os.path.exists(training_csv_path):
             self.training_data_df = pd.read_csv(training_csv_path)
-            logger.info(f"✅ Training data loaded from {training_csv_path}: {len(self.training_data_df)} sequences")
+            logger.info(f"✅ Training data loaded: {len(self.training_data_df)} sequences")
+            
+            # Precompute hashes for all sequences
+            self.sequence_hash_dict = {hash(row['sequence']): row['species'] 
+                                       for _, row in self.training_data_df.iterrows()
+                                       if 'sequence' in row and 'species' in row}
+            logger.info(f"✅ Sequence hash table built with {len(self.sequence_hash_dict)} entries")
         else:
             logger.warning("⚠️ Training CSV path not provided or file not found")
             self.training_data_df = None
+            self.sequence_hash_dict = {}
         
-        # Precompute features for known sequences for exact matching
+        # Precompute features for known sequences
         extractor = FeatureExtractor()
         self.known_features = extractor.extract_features(
             self.known_sequences,
             k_values=self.feature_extractor_params.get('k_values', [4]),
             top_k=self.feature_extractor_params.get('top_k', 50)
         )
-        # Ensure known features have same columns as feature_columns
         self.known_features = self._align_features(self.known_features)
-        
         logger.info("✅ Preprocessors loaded.")
         logger.info(f"✅ Known sequences: {len(self.known_sequences)}")
         logger.info(f"✅ Known labels: {len(self.known_labels)}")
@@ -101,14 +107,11 @@ class eDNAPreprocessor:
         return self.scaler.transform(feature_df)
 
     def find_exact_match_in_training_data(self, query_sequence):
-        """Direct lookup in training data CSV for exact sequence matches"""
-        if self.training_data_df is None or 'sequence' not in self.training_data_df.columns:
-            return None
-        
-        # Exact match lookup
-        matches = self.training_data_df[self.training_data_df['sequence'] == query_sequence]
-        if not matches.empty:
-            return matches.iloc[0]  # Return first match
+        """Optimized exact match using sequence hash dict (O(1) lookup)"""
+        seq_hash = hash(query_sequence)
+        species = self.sequence_hash_dict.get(seq_hash)
+        if species:
+            return {'sequence': query_sequence, 'species': species}
         return None
 
 # ================= Sequence Similarity Calculator =================
@@ -558,34 +561,36 @@ def predict_csv(input_csv, output_dir="prediction_results", model_dir="processed
         exact_training_match = preprocessor.find_exact_match_in_training_data(seq)
         
         if exact_training_match is not None:
-            # Exact match found in training data - use the known species
-            species_col = 'species' if 'species' in exact_training_match.index else 'label'
-            if species_col in exact_training_match.index:
-                species_name = exact_training_match[species_col]
-                
-                # Find top similar sequences for display (filtered to quality species only)
-                top_matches = similarity_calc.find_top_matches(seq, features, top_n=10)
-                filtered_top_matches = filter_quality_similarity_matches(top_matches, top_n=3)
-                
-                result = {
-                    'sequence_id': f"ASV_{i+1:04d}",
-                    'sample_id': sample_id,
-                    'sequence': seq,
-                    'predicted_species': species_name,
-                    'confidence': 1.0,  # 100% confidence for exact matches
-                    'similarity_percentage': 100.0,
-                    'status': 'known',
-                    'exact_match': True,
-                    'match_source': 'direct_training_data_lookup',
-                    'top_predictions': filtered_top_matches
-                }
-                
-                # Add taxonomy if available
-                if preprocessor.taxonomy_hierarchy and species_name in preprocessor.taxonomy_hierarchy:
-                    result.update(preprocessor.taxonomy_hierarchy[species_name])
-                
-                results.append(result)
-                continue
+            # exact_training_match is a dict like {"sequence": ..., "species": ...}
+            species_name = (
+                exact_training_match.get("species")
+                or exact_training_match.get("label")
+                or pred_species_name
+            )
+
+            # Find top similar sequences for display (filtered to quality species only)
+            top_matches = similarity_calc.find_top_matches(seq, features, top_n=10)
+            filtered_top_matches = filter_quality_similarity_matches(top_matches, top_n=3)
+
+            result = {
+                'sequence_id': f"ASV_{i+1:04d}",
+                'sample_id': sample_id,
+                'sequence': seq,
+                'predicted_species': species_name,
+                'confidence': 1.0,  # 100% for exact matches
+                'similarity_percentage': 100.0,
+                'status': 'known',
+                'exact_match': True,
+                'match_source': 'direct_training_data_lookup',
+                'top_predictions': filtered_top_matches
+            }
+
+            # Add taxonomy if available
+            if preprocessor.taxonomy_hierarchy and species_name in preprocessor.taxonomy_hierarchy:
+                result.update(preprocessor.taxonomy_hierarchy[species_name])
+
+            results.append(result)
+            continue
         
         # SECOND: Check for exact matches in processed known sequences
         exact_matches = []
@@ -882,7 +887,7 @@ def generate_summary_report(results, alpha_diversity, num_viz_files):
 # ================= Main =================
 if __name__ == "__main__":
     input_csv = "C:/Users/loq/OneDrive/Desktop/SIH/BioTrace/edna-backend/temp/predict.csv"
-    training_csv_path = "data/fasta_parsed.csv"  # Path to your original training CSV
+    training_csv_path = "data/merged_filtered_sequences.csv"  # Path to your original training CSV
     
     results_df = predict_csv(
         input_csv, 
