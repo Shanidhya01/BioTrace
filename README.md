@@ -1,4 +1,4 @@
-# EDNA — Environmental DNA Analysis (Monorepo)
+# EDNA — Environmental DNA Analysis
 
 Complete CSV-to-insights workflow for eDNA:
 
@@ -43,112 +43,84 @@ Note: There are two copies of the stack. Prefer the root apps unless you intenti
 
 ---
 
-
 ## Repository Structure
 
 ```
-EDNA/
+EDNA
 ├─ .gitattributes
 ├─ .gitignore
-├─ Readme.md                  # legacy; this README supersedes it
-│
-├─ edna-backend/              # Backend (FastAPI) — primary
-│  ├─ app.py                  # optional entry/wrapper
-│  ├─ config.py               # optional config helpers
-│  ├─ predict_csv.py          # CLI-style prediction helper
-│  ├─ requirements.txt
-│  ├─ tests_post_upload.py    # quick POST /upload-csv test
-│  ├─ tests_temp_check_root.py# prints/validates temp path
-│  ├─ train_model.py          # model training script
-│  ├─ app/
-│  │  ├─ __init__.py
-│  │  ├─ main.py              # FastAPI app + CORS + router include
-│  │  ├─ routes.py            # /health, /upload-csv, /sample-data
-│  │  └─ utils.py             # save_uploaded_csv, run_prediction, paths
-│  ├─ data/
-│  │  ├─ sample_input.csv
-│  │  ├─ sample_output.csv
-│  │  └─ results_export.json
-│  ├─ processed_data/         # model artifacts
-│  │  ├─ edna_lgb_model.txt
-│  │  ├─ feature_columns.pkl
-│  │  ├─ label_encoder.pkl
-│  │  ├─ predicted_results.csv
-│  │  └─ scaler.pkl
-│  └─ temp/                   # uploads landing directory
-│     └─ predict.csv
-│
-├─ edna-frontend/             # Frontend (React + Vite) — primary
-│  ├─ index.html
-│  ├─ package.json
-│  ├─ vite.config.js
-│  ├─ public/
-│  │  └─ vite.svg
-│  └─ src/
-│     ├─ App.css
-│     ├─ App.jsx
-│     ├─ index.css
-│     ├─ main.jsx
-│     ├─ api/
-│     │  └─ api.js            # uploadCSV(formData) and other requests
-│     ├─ assets/
-│     │  └─ react.svg
-│     ├─ components/
-│     │  ├─ Charts.jsx
-│     │  ├─ DashboardPDF.jsx
-│     │  ├─ DataTable.jsx
-│     │  ├─ Navbar.jsx
-│     │  ├─ ResultsSummary.jsx
-│     │  ├─ SummaryCards.jsx
-│     │  ├─ TaxonomyTable.jsx
-│     │  └─ UploadForm.jsx    # modal-based CSV upload
-│     └─ lib/
-│        └─ utils.js
-│
-├─ prediction_results/        # sample outputs/visualizations
-│  ├─ prediction_results.csv
-│  ├─ results_export.json
-│  ├─ summary_report.txt
-│  ├─ abundance_heatmap.html
-│  ├─ network_graph.html
-│  ├─ rarefaction_curve.html
-│  └─ taxonomic_barplot.html
-│
-├─ processed_data/            # additional artifacts (root-level)
-│  ├─ feature_columns.pkl
-│  ├─ label_encoder.pkl
-│  └─ scaler.pkl
-│
-└─ BioTrace/                  # Secondary copy (legacy/experimental)
-   ├─ edna-backend/
-   │  └─ app/, routes.py, utils.py, ...
-   └─ edna-frontend/
-      └─ src/, components, ...
+├─ README.md
+├─ BioTrace
+│  ├─ .gitignore
+│  ├─ edna-backend
+│  │  ├─ app.py
+│  │  ├─ config.py
+│  │  ├─ requirements.txt
+│  │  ├─ tests_post_upload.py
+│  │  ├─ tests_temp_check_root.py
+│  │  ├─ train_model.py
+│  │  └─ app
+│  │     ├─ __init__.py
+│  │     ├─ main.py
+│  │     ├─ routes.py
+│  │     ├─ utils.py
+│  │     └─ __pycache__
+│  │        ├─ __init__.cpython-311.pyc
+│  │        ├─ main.cpython-311.pyc
+│  │        ├─ routes.cpython-311.pyc
+│  │        └─ utils.cpython-311.pyc
+│  └─ edna-frontend
+│     ├─ .gitignore
+│     ├─ .gitignore copy
+│     ├─ components.json
+│     ├─ eslint.config copy.js
+│     ├─ eslint.config.js
+│     ├─ index.html
+│     ├─ jsconfig.json
+│     ├─ package-lock copy.json
+│     ├─ package.json
+│     ├─ README copy.md
+│     ├─ README.md
+│     ├─ vite.config copy.js
+│     ├─ vite.config.js
+│     ├─ public
+│     │  └─ vite.svg
+│     └─ src
+│        ├─ App.css
+│        ├─ App.jsx
+│        ├─ index.css
+│        ├─ main.jsx
+│        ├─ api
+│        │  └─ api.js
+│        ├─ assets
+│        │  └─ react.svg
+│        ├─ components
+│        │  ├─ Charts.jsx
+│        │  ├─ DashboardPDF.jsx
+│        │  ├─ DataTable.jsx
+│        │  ├─ Navbar.jsx
+│        │  ├─ ResultsSummary.jsx
+│        │  ├─ SummaryCards.jsx
+│        │  ├─ TaxonomyTable.jsx
+│        │  ├─ UploadForm.jsx
+│        │  └─ ui
+│        │     ├─ button.jsx
+│        │     ├─ card.jsx
+│        │     ├─ input.jsx
+│        │     └─ table.jsx
+│        ├─ lib
+│        │  └─ utils.js
+│        └─ pages
+│           ├─ Dashboard.jsx
+│           └─ Home.jsx
+└─ processed_data
+   ├─ feature_columns.pkl
+   ├─ label_encoder.pkl
+   └─ scaler.pkl
 ```
 
----
-
-## Backend (FastAPI)
-
-### Requirements
-
-* Python 3.10+
-* pip
-* Windows PowerShell (recommended)
-
-### Install
-
-```
-cd d:\EDNA\edna-backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-If requirements.txt is missing entries, install manually:
-
-```
 pip install fastapi "uvicorn[standard]" pydantic python-multipart numpy pandas scikit-learn lightgbm joblib python-dotenv
+
 ```
 
 ### Environment
@@ -156,21 +128,27 @@ pip install fastapi "uvicorn[standard]" pydantic python-multipart numpy pandas s
 Optional .env overrides:
 
 ```
+
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 TEMP_DIR=d:\EDNA\edna-backend\temp
 MODEL_PATH=d:\EDNA\edna-backend\processed_data\edna_lgb_model.txt
+
 ```
 
 Ensure upload dir exists:
 
 ```
+
 powershell -Command "New-Item -ItemType Directory -Force -Path 'd:\EDNA\edna-backend\temp' | Out-Null"
+
 ```
 
 ### Run
 
 ```
+
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
 ```
 
 Key endpoints:
@@ -189,10 +167,12 @@ Key endpoints:
 ### Install & Run
 
 ```
+
 cd d:\EDNA\edna-frontend
 npm install
 echo VITE_API_BASE_URL=http://localhost:8000 > .env
 npm run dev
+
 ```
 
 Dev server: [http://localhost:5173](http://localhost:5173)
