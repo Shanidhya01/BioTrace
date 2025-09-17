@@ -1,0 +1,20 @@
+# Virtual environment
+.venv/
+
+# Data files
+data/
+*.csv
+*.xlsx
+
+# Processed data and ML artifacts
+processed_data/
+*.pkl
+*.txt
+
+# Logs
+*.log
+
+# OS/Jupyter cache
+.DS_Store
+Thumbs.db
+.ipynb_checkpoints/
