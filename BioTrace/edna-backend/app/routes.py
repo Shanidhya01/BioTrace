@@ -11,6 +11,10 @@ from datetime import datetime
 from app.utils import save_uploaded_csv, run_prediction
 import subprocess
 import sys
+from uuid import uuid4
+import threading
+import time
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -32,6 +36,44 @@ class UploadResponse(BaseModel):
     summary: Dict[str, Any]
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
+# Job store (in‑memory)
+JOBS: dict = {}  # job_id -> {status, logs, error, started_at, finished_at, input_file}
+
+def _append_log(job_id: str, message: str):
+    job = JOBS.get(job_id)
+    if job is None: return
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    job["logs"].append(f"[{timestamp}] {message}")
+
+def _run_prediction_job(job_id: str, predict_script: str):
+    job = JOBS[job_id]
+    try:
+        _append_log(job_id, "Starting prediction process.")
+        proc = subprocess.Popen(
+            [sys.executable, predict_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        for line in proc.stdout:
+            line = line.rstrip()
+            if line:
+                _append_log(job_id, line)
+        rc = proc.wait()
+        if rc == 0:
+            job["status"] = "completed"
+            job["finished_at"] = datetime.now().isoformat()
+            _append_log(job_id, "✅ Prediction script completed successfully.")
+        else:
+            job["status"] = "error"
+            job["finished_at"] = datetime.now().isoformat()
+            _append_log(job_id, f"❌ Prediction script failed (exit {rc}).")
+    except Exception as e:
+        job["status"] = "error"
+        job["finished_at"] = datetime.now().isoformat()
+        _append_log(job_id, f"Exception: {e}")
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint to verify API is running"""
@@ -44,20 +86,18 @@ async def health_check():
 @router.post("/upload-csv/")
 async def upload_csv(file: UploadFile = File(...)):
     logger.info(f"📥 Received upload request for file: {file.filename}")
-
     try:
         if not file.filename.lower().endswith(".csv"):
             raise HTTPException(status_code=400, detail="Only CSV files allowed")
 
         input_dir = r"C:/Users/loq/OneDrive/Desktop/SIH/BioTrace/edna-backend/temp"
         os.makedirs(input_dir, exist_ok=True)
-
         input_path = os.path.join(input_dir, "predict.csv")
         contents = await file.read()
         with open(input_path, "wb") as f:
             f.write(contents)
 
-        # Validate CSV
+        # Basic validation
         df = pd.read_csv(input_path)
         if 'sequence' not in df.columns:
             raise ValueError("CSV must contain 'sequence' column")
@@ -68,35 +108,56 @@ async def upload_csv(file: UploadFile = File(...)):
 
         logger.info(f"✅ CSV validation passed: {len(df)} sequences found")
 
-        # ✅ Run predict_csv.py automatically after saving
         predict_script = r"C:/Users/loq/OneDrive/Desktop/SIH/.venv/predict_csv.py"
 
-        logger.info(f"⚡ Running prediction script: {predict_script}")
-        result = subprocess.run(
-            [sys.executable, predict_script],  # uses current python interpreter
-            capture_output=True,
-            text=True,
-            check=False
+        # Create job
+        job_id = str(uuid4())
+        JOBS[job_id] = {
+            "status": "running",
+            "logs": [],
+            "error": None,
+            "started_at": datetime.now().isoformat(),
+            "finished_at": None,
+            "input_file": input_path
+        }
+        _append_log(job_id, f"📥 File received: {file.filename}")
+        _append_log(job_id, f"✅ CSV validation passed ({len(df)} sequences)")
+        _append_log(job_id, "⚡ Running prediction script...")
+
+        # Start background thread
+        thread = threading.Thread(
+            target=_run_prediction_job,
+            args=(job_id, predict_script),
+            daemon=True
         )
-
-        if result.returncode != 0:
-            logger.error(f"❌ Prediction script failed:\n{result.stderr}")
-            raise HTTPException(status_code=500, detail=f"Prediction failed: {result.stderr}")
-
-        logger.info(f"✅ Prediction script completed successfully:\n{result.stdout}")
+        thread.start()
 
         return {
-            "status": "success",
-            "message": "File uploaded and prediction script executed",
-            "stdout": result.stdout
+            "status": "accepted",
+            "job_id": job_id,
+            "message": "Upload accepted. Prediction running."
         }
 
     except ValueError as e:
-        logger.error(f"❌ Validation error: {str(e)}")
-        raise HTTPException(status_code=400, detail={"message": "Validation error", "error": str(e)})
+        logger.error(f"Validation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Server error: {str(e)}")
-        raise HTTPException(status_code=500, detail={"message": "Server error", "error": str(e)})
+        logger.exception("Upload failed.")
+        raise HTTPException(status_code=500, detail="Server error")
+
+@router.get("/status/{job_id}")
+async def job_status(job_id: str):
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {
+        "job_id": job_id,
+        "status": job["status"],
+        "logs": job["logs"][-200:],  # last 200 lines
+        "started_at": job["started_at"],
+        "finished_at": job["finished_at"]
+    }
+
 import math
 from fastapi.responses import JSONResponse
 

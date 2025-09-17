@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import UploadForm from "../components/UploadForm";
 import SummaryCard from "../components/SummaryCards";
 import TaxonomyTable from "../components/TaxonomyTable";
@@ -81,8 +81,25 @@ const Dashboard = () => {
     rarefaction_curve: { x: [], y: [] },
     visualizations: []
   });
-  const [loading, setLoading] = useState(true);
+  // Start with NO data shown (no initial fetch)
+  const [loading, setLoading] = useState(false); // was true
   const [error, setError] = useState(null);
+  const [jobId, setJobId] = useState(null);
+  const [jobLogs, setJobLogs] = useState([]);
+  const [jobStatus, setJobStatus] = useState(null);
+  const [processing, setProcessing] = useState(false);
+  const [suppressResults, setSuppressResults] = useState(false);
+  const [showPipelineModal, setShowPipelineModal] = useState(false);
+  const [progress, setProgress] = useState(0);          // smooth progress shown
+  const [progressTarget, setProgressTarget] = useState(0); // target to ease toward
+  const pollRef = useRef(null);                        // <— NEW
+  const POLL_INTERVAL = 4000;                          // <— NEW
+  const MAX_POLL_ATTEMPTS = 90;                        // (≈6 min) adjust as needed
+  const pollAttempts = useRef(0);                      // <— NEW
+  const statusPollRef = useRef(null);
+
+  const LS_CACHE_KEY = "bt_cachedResults";
+  const LS_HAS_DATA_KEY = "bt_hasData"; // flag that user already uploaded once
 
   // Convenience local variable with guards
   const results = Array.isArray(data.results) ? data.results : [];
@@ -101,16 +118,6 @@ const Dashboard = () => {
     }
   }, [results.length, resultsPage]);
 
-  useEffect(() => {
-    fetchData();
-    const onScroll = () => {
-      const depth = Math.min(window.scrollY / 800, 1);
-      document.documentElement.style.setProperty("--ocean-depth", `${0.2 + depth * 0.6}`);
-    };
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   const normalizeApiPayload = (payload) => {
     if (!payload || typeof payload !== 'object') {
       return { results: [], alpha_diversity: {}, beta_diversity: {}, rarefaction_curve: { x: [], y: [] }, visualizations: [] };
@@ -124,24 +131,210 @@ const Dashboard = () => {
     };
   };
 
-  const fetchData = async () => {
+  // (Polling fetch kept – only used after upload)
+  const fetchData = async (silent = false) => {
     try {
-      setLoading(true);
-      const response = await fetch("http://localhost:8000/api/sample-data/");
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-      const jsonData = await response.json();
-      setData(normalizeApiPayload(jsonData));
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      setError(err.message || "Fetch failed");
+      if (!silent) setLoading(true);
+      const res = await fetch("http://localhost:8000/api/sample-data/");
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const jsonData = await res.json();
+      const normalized = normalizeApiPayload(jsonData);
+      setData(normalized);
+      if (normalized.results.length > 0) {
+        setProcessing(false);
+        setSuppressResults(false);
+        setShowPipelineModal(false); // close popup when results are ready
+        shouldScrollRef.current = true;
+        stopPolling();
+      } else {
+        if (!processing) setProcessing(true);
+      }
+    } catch (e) {
+      setError(e.message || "Fetch failed");
+      setProcessing(false);
+      setSuppressResults(false);
+      setShowPipelineModal(false); // close on error
+      stopPolling();
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
+  const startPolling = () => {
+    if (pollRef.current) return; // already polling
+    pollAttempts.current = 0;
+    pollRef.current = setInterval(async () => {
+      pollAttempts.current += 1;
+      await fetchData(true); // silent refresh
+      if (pollAttempts.current >= MAX_POLL_ATTEMPTS) {
+        stopPolling();
+        setProcessing(false);
+      }
+    }, POLL_INTERVAL);
+  };
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  // Restore cached results on page load and silently refresh
+  useEffect(() => {
+    const cached = localStorage.getItem(LS_CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed.results)) {
+          setData(parsed);
+        }
+      } catch {}
+    }
+    // If user previously had data, try to get fresh results silently
+    if (localStorage.getItem(LS_HAS_DATA_KEY)) {
+      fetchData(true); // silent refresh updates cache if backend changed
+    }
+  }, []);
+
+  // Reset pagination when result count changes
+  useEffect(() => {
+    setResultsPage(0);
+  }, [data.results?.length]);
+
+  // Map key phrases to human readable steps
+  const PROCESS_STEPS = [
+    { id: "received",  label: "File Uploaded",        patterns: ["File received"] },
+    { id: "validated", label: "CSV Validated",        patterns: ["CSV validation passed"] },
+    { id: "starting",  label: "Starting Prediction",  patterns: ["Starting prediction process"] },
+    { id: "running",   label: "Running Model",        patterns: ["Running prediction script", "Epoch", "Processing"] },
+    { id: "completed", label: "Completed",            patterns: ["completed successfully"] },
+  ];
+
+  const lowerLogs = jobLogs.map(l => l.toLowerCase());
+  const matchIndex = (patterns) =>
+    lowerLogs.findIndex(line => patterns.some(p => line.includes(p.toLowerCase())));
+
+  const stepStates = PROCESS_STEPS.map((s, idx) => {
+    const hit = matchIndex(s.patterns);
+    let status = "pending";
+    if (hit !== -1) status = "active";
+    if (hit !== -1) {
+      const laterHit = PROCESS_STEPS.slice(idx+1).some(ns => matchIndex(ns.patterns) !== -1);
+      if (laterHit || jobStatus === "completed") status = "done";
+    }
+    if (jobStatus === "error" && status !== "done") status = "error";
+    return { ...s, status };
+  });
+  // Compute highest step reached from logs
+  const highestIdx = PROCESS_STEPS.reduce((acc, s, idx) => (
+    matchIndex(s.patterns) !== -1 ? idx : acc
+  ), -1);
+  // Map steps to target ceilings for consistent increase
+  const STAGE_TARGETS = [10, 30, 50, 90, 100]; // received, validated, starting, running, completed
+  // Update target when logs/status change (never decreases)
+  useEffect(() => {
+    if (!jobId) return;
+    let target = 0;
+    if (highestIdx >= 0) target = STAGE_TARGETS[highestIdx];
+    if (jobStatus === "running" && target < 5) target = 5; // minimal baseline
+    if (jobStatus === "completed") target = 100;
+    setProgressTarget(prev => Math.max(prev, target));
+  }, [jobId, highestIdx, jobStatus]);
+  // Smoothly ease progress toward target
+  useEffect(() => {
+    const id = setInterval(() => {
+      setProgress(p => (p < progressTarget ? Math.min(progressTarget, p + Math.max(0.2, (progressTarget - p) * 0.08)) : p));
+    }, 80);
+    return () => clearInterval(id);
+  }, [progressTarget]);
+  // While running, creep target slowly up to soft ceiling (keeps motion even if no new logs)
+  useEffect(() => {
+    if (jobStatus !== "running") return;
+    const SOFT_CEIL = 90;
+    const id = setInterval(() => {
+      setProgressTarget(t => Math.min(SOFT_CEIL, Math.max(t, progress + 0.25)));
+    }, 600);
+    return () => clearInterval(id);
+  }, [jobStatus, progress]);
+  const progressPct = Math.round(progress);
+  const [showRawLogs, setShowRawLogs] = useState(false);
+
+  // Poll job status
+  const startStatusPolling = (jid) => {
+    if (statusPollRef.current) return;
+    setJobStatus("running");
+    setProcessing(true);
+    statusPollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch(`http://localhost:8000/api/status/${jid}`);
+        if (!r.ok) throw new Error("Status fetch failed");
+        const j = await r.json();
+        setJobStatus(j.status);
+        setJobLogs(j.logs || []);
+
+        if (j.status === "completed") {
+          clearInterval(statusPollRef.current);
+          statusPollRef.current = null;
+          // Fetch final prediction results now
+            fetchData(false);
+        }
+        if (j.status === "error") {
+          clearInterval(statusPollRef.current);
+          statusPollRef.current = null;
+          setProcessing(false);
+        }
+      } catch (e) {
+        clearInterval(statusPollRef.current);
+        statusPollRef.current = null;
+        setProcessing(false);
+      }
+    }, 2500);
+  };
+
+  // OPTIONAL: extra safety effect (fetch when status flips to completed)
+  useEffect(() => {
+    if (jobStatus === "completed" && results.length === 0) {
+      fetchData(false);
+    }
+  }, [jobStatus]); 
+
+  const clearStatusPolling = () => {
+    if (statusPollRef.current) {
+      clearInterval(statusPollRef.current);
+      statusPollRef.current = null;
+    }
+  };
+  useEffect(()=>() => clearStatusPolling(), []);
+
   const handleUpload = async (uploadedData) => {
-    // If your UploadForm already returns API-shaped data:
-    setData(normalizeApiPayload(uploadedData));
+    const normalized = normalizeApiPayload(uploadedData);
+    setData(normalized);
+    if (normalized.results.length > 0) {
+      localStorage.setItem(LS_CACHE_KEY, JSON.stringify(normalized));
+      localStorage.setItem(LS_HAS_DATA_KEY, "1");
+      setProcessing(false);
+      stopPolling();
+    } else {
+      setProcessing(true);
+      startPolling();
+    }
+  };
+
+  const handleUploadStart = () => {
+    setSuppressResults(true);
+    setProcessing(true);
+    // clear on-screen data to avoid flashes
+    setData(d => ({
+      ...d,
+      results: [],
+      alpha_diversity: {},
+      beta_diversity: {},
+      rarefaction_curve: { x: [], y: [] },
+    }));
+    // reset pagination if present
+    setResultsPage?.(0);
+    // keep cache intact so reloads still work if needed
   };
 
   const handleDownload = (rows) => {
@@ -276,6 +469,25 @@ const Dashboard = () => {
     },
   ];
 
+  // Scroll-to-results refs
+  const resultsSectionRef = useRef(null);
+  const shouldScrollRef = useRef(false);
+
+  // Auto-scroll effect when results are visible
+  useEffect(() => {
+    if (shouldScrollRef.current && !processing && !suppressResults && (data.results?.length || 0) > 0) {
+      requestAnimationFrame(() => {
+        const el = resultsSectionRef.current || document.getElementById("results-section");
+        if (el) {
+          const HEADROOM = 90; // adjust if you have a fixed header
+          const y = el.getBoundingClientRect().top + window.pageYOffset - HEADROOM;
+          window.scrollTo({ top: y, behavior: "smooth" });
+        }
+        shouldScrollRef.current = false;
+      });
+    }
+  }, [data.results?.length, processing, suppressResults]);
+
   return (
     <div
       className="relative min-h-screen overflow-hidden"
@@ -365,7 +577,21 @@ const Dashboard = () => {
       <div className="relative z-30 max-w-7xl mx-auto px-6 py-8 space-y-8">
         <div className="transform transition-all duration-500 hover:scale-[1.02]">
           <div className="bg-white/85 backdrop-blur-lg rounded-2xl shadow-2xl border border-blue-300/40 p-6 hover:shadow-blue-300/40 transition pulse-glow">
-            <UploadForm onUpload={handleUpload} />
+            <UploadForm
+              onUploadStart={() => {
+                handleUploadStart();
+                setShowPipelineModal(true); // open popup at start
+              }}
+              onJobStart={(jid) => {
+                setJobId(jid);
+                setJobLogs([]);
+                setJobStatus("running");
+                setProcessing(true);
+                setShowPipelineModal(true); // ensure open
+                startStatusPolling(jid);
+              }}
+              onUploadComplete={handleUpload}
+            />
           </div>
         </div>
 
@@ -392,8 +618,131 @@ const Dashboard = () => {
           </div>
         )}
 
-        {!loading && !error && results.length > 0 && (
-          <div className="space-y-10 animate-fadeIn">
+        {processing && results.length === 0 && !error && (
+          <div className="text-center text-xs text-blue-100">
+            Waiting for prediction results… (auto-refreshing)
+          </div>
+        )}
+
+        {/* Replace the inline process box with a modal */}
+        {jobId && showPipelineModal && (
+          <div
+            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="relative w-full max-w-xl bg-white/90 backdrop-blur rounded-2xl border border-blue-200 shadow-2xl">
+              {/* <button
+                onClick={() => setShowPipelineModal(false)}
+                disabled={processing}
+                title={processing ? "Processing…" : "Close"}
+                className={`absolute right-3 top-3 px-2 py-1 text-xs rounded ${
+                  processing
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    : "bg-white border border-blue-300 text-blue-700 hover:bg-blue-50"
+                }`}
+              >
+                Close
+              </button> */}
+
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-blue-900">Prediction Pipeline</h3>
+                  <span className={`text-xs font-medium ${jobStatus === "error" ? "text-red-600" : "text-blue-700"}`}>
+                    {jobStatus === "error" ? "Error" : `${progressPct}%`}
+                  </span>
+                </div>
+
+                <div className="w-full h-2 bg-blue-100 rounded mb-5 overflow-hidden">
+                  <div
+                    className={`h-2 transition-all duration-500 ${
+                      jobStatus === "error"
+                        ? "bg-red-500"
+                        : "bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700"
+                    }`}
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-4 mb-4">
+                  {stepStates.map((step, i) => {
+                    const isLast = i === stepStates.length - 1;
+                    const color =
+                      step.status === "done"
+                        ? "bg-emerald-500"
+                        : step.status === "active"
+                        ? "bg-blue-500 animate-pulse"
+                        : step.status === "error"
+                        ? "bg-red-500"
+                        : "bg-blue-200";
+                    const dot =
+                      step.status === "done" ? "✓"
+                        : step.status === "error" ? "!"
+                        : step.status === "active" ? "…" : "";
+                    return (
+                      <div key={step.id} className="relative pl-8">
+                        {!isLast && (
+                          <span
+                            className="absolute left-3.5 top-5 w-px"
+                            style={{
+                              height: 36,
+                              background:
+                                step.status === "done"
+                                  ? "linear-gradient(to bottom,#3b82f6,#60a5fa)"
+                                  : "#bfdbfe"
+                            }}
+                          />
+                        )}
+                        <span className={`absolute left-0 top-1 flex items-center justify-center h-7 w-7 rounded-full text-xs font-bold text-white shadow ${color}`}>
+                          {dot}
+                        </span>
+                        <div className="flex flex-col">
+                          <span className={`text-sm font-medium ${
+                            step.status === "done"
+                              ? "text-blue-900"
+                              : step.status === "active"
+                              ? "text-blue-700"
+                              : step.status === "error"
+                              ? "text-red-600"
+                              : "text-blue-500"
+                          }`}>
+                            {step.label}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-wide text-blue-400 font-medium">
+                            {step.status === "done" && "Done"}
+                            {step.status === "active" && "In Progress"}
+                            {step.status === "pending" && "Pending"}
+                            {step.status === "error" && "Failed"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setShowRawLogs(s => !s)}
+                  className="text-[11px] px-2 py-1 rounded border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition mb-3"
+                >
+                  {showRawLogs ? "Hide Details" : "Show Details"}
+                </button>
+                {showRawLogs && (
+                  <div className="max-h-44 overflow-auto bg-blue-50 border border-blue-200 rounded p-2 text-[10px] font-mono text-blue-800 space-y-0.5">
+                    {jobLogs.map((l,i)=><div key={i}>{l}</div>)}
+                  </div>
+                )}
+                {jobStatus === "error" && (
+                  <div className="mt-3 text-xs text-red-600 font-semibold">
+                    An error occurred.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && results.length > 0 && !processing && !suppressResults && (
+          <div ref={resultsSectionRef} id="results-section" className="space-y-10 animate-fadeIn">
             <section>
               <h2 className="section-title">Overview</h2>
               <div className="glass-card">
