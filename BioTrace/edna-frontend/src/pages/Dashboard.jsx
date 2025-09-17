@@ -87,6 +87,20 @@ const Dashboard = () => {
   // Convenience local variable with guards
   const results = Array.isArray(data.results) ? data.results : [];
 
+  // Pagination for Prediction Results table
+  const RESULTS_PAGE_SIZE = 10;
+  const [resultsPage, setResultsPage] = useState(0);
+  const totalResultPages = Math.ceil(results.length / RESULTS_PAGE_SIZE) || 1;
+  const paginatedResults = results.slice(
+    resultsPage * RESULTS_PAGE_SIZE,
+    resultsPage * RESULTS_PAGE_SIZE + RESULTS_PAGE_SIZE
+  );
+  useEffect(() => {
+    if (resultsPage * RESULTS_PAGE_SIZE >= results.length && resultsPage !== 0) {
+      setResultsPage(0);
+    }
+  }, [results.length, resultsPage]);
+
   useEffect(() => {
     fetchData();
     const onScroll = () => {
@@ -420,6 +434,7 @@ const Dashboard = () => {
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition"
                 >
                   ⬇ Download Results
+                  {/* download all */}
                 </button>
               </div>
               <div className="glass-table">
@@ -435,11 +450,12 @@ const Dashboard = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white/50 backdrop-blur-md divide-y divide-blue-200">
-                      {results.map((item, i) => {
+                      {paginatedResults.map((item, i) => {
+                        const absoluteIndex = resultsPage * RESULTS_PAGE_SIZE + i;
                         const conf = (item.confidence ?? item.confidence_score ?? 0) * 100;
                         const tops = Array.isArray(item.top_predictions) ? item.top_predictions.slice(0,3) : [];
                         return (
-                          <tr key={i} className="hover:bg-blue-50/50 transition-colors duration-200">
+                          <tr key={absoluteIndex} className="hover:bg-blue-50/50 transition-colors duration-200">
                             <td className="px-6 py-4 text-sm text-blue-900 font-medium">
                               {item.predicted_species || '—'}
                             </td>
@@ -475,6 +491,58 @@ const Dashboard = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {results.length > RESULTS_PAGE_SIZE && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-4 border-t border-blue-200 bg-white/40 backdrop-blur">
+                    <div className="text-xs text-blue-700">
+                      Showing{" "
+                      }
+                      <span className="font-semibold">
+                        {resultsPage * RESULTS_PAGE_SIZE + 1}
+                        -
+                        {Math.min(
+                          resultsPage * RESULTS_PAGE_SIZE + RESULTS_PAGE_SIZE,
+                          results.length
+                        )}
+                      </span>{" "}
+                      of <span className="font-semibold">{results.length}</span> results
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setResultsPage(p => Math.max(0, p - 1))}
+                        disabled={resultsPage === 0}
+                        className={`px-3 py-1.5 rounded text-xs font-medium border transition ${
+                          resultsPage === 0
+                            ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                            : "bg-white hover:bg-blue-50 text-blue-700 border-blue-300"
+                        }`}
+                      >
+                        Prev
+                      </button>
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="text-gray-500">Page</span>
+                        <span className="font-semibold text-blue-700">
+                          {resultsPage + 1}
+                        </span>
+                        <span className="text-gray-500">/ {totalResultPages}</span>
+                      </div>
+                      <button
+                        onClick={() =>
+                          setResultsPage(p => Math.min(totalResultPages - 1, p + 1))
+                        }
+                        disabled={resultsPage >= totalResultPages - 1}
+                        className={`px-3 py-1.5 rounded text-xs font-medium border transition ${
+                          resultsPage >= totalResultPages - 1
+                            ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                            : "bg-white hover:bg-blue-50 text-blue-700 border-blue-300"
+                        }`}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           </div>

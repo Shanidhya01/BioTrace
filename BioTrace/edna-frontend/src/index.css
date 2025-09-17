@@ -19,3 +19,7 @@
   background: rgba(255, 255, 255, 0.07); /* slightly brighter on hover */
 }
 
+.exporting * {
+  animation: none !important;
+  transition: none !important;
+}
