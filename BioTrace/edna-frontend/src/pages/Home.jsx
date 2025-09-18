@@ -228,10 +228,13 @@ const Home = () => {
             className="text-lg transition-colors duration-300 deep-text"
             style={{ color: scrollProgress > 0.4 ? '#b3e5fc' : '#374151' }}
           >
-            As you scroll deeper into our ocean-themed interface, experience the transition 
-            from shallow coastal waters to the mysterious depths of the deep sea. Our eDNA 
-            analysis tools help researchers uncover the hidden biodiversity that exists in 
-            these remote marine environments.
+             An AI-first eDNA system that predicts
+            known species with confidence, flags
+            and groups unknown DNA into
+            repeatable clusters (candidate new
+            taxa), and delivers biodiversity metrics +
+            visual reports — all through a simple CSV
+            upload.
           </p>
         </div>
       </div>

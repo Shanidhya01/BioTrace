@@ -5,6 +5,16 @@ const Navbar = () => {
   const location = useLocation();
   const currentPath = location.pathname;
 
+  // Add a small school of fishes with varied sizes/speeds/directions
+  const fishes = [
+    { top: "20%", size: 18, color: "#3b82f6", duration: 11, delay: 0.0, reverse: false },
+    { top: "32%", size: 14, color: "#60a5fa", duration: 9,  delay: 0.6, reverse: true  },
+    { top: "45%", size: 20, color: "#2563eb", duration: 13, delay: 1.2, reverse: false },
+    { top: "58%", size: 16, color: "#38bdf8", duration: 10, delay: 1.8, reverse: true  },
+    { top: "70%", size: 15, color: "#0ea5e9", duration: 12, delay: 0.9, reverse: false },
+    { top: "26%", size: 13, color: "#22d3ee", duration: 8,  delay: 1.5, reverse: true  },
+  ];
+
   const Button = ({ variant, className, children, to }) => {
     const baseClasses =
       "px-4 py-2 font-medium transition-all duration-300 shadow-md hover:shadow-xl transform hover:-translate-y-0.5 rounded-xl relative overflow-hidden";
@@ -23,50 +33,61 @@ const Navbar = () => {
 
   return (
     <nav className="relative bg-gradient-to-r from-blue-50/70 via-cyan-50/70 to-blue-100/70 shadow-xl px-6 py-4 flex justify-between items-center sticky top-0 z-50 backdrop-blur-lg border-b border-blue-200/40 overflow-hidden">
-      {/* Ocean wave */}
-      <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 opacity-70"></div>
+      {/* removed bottom wave bar */}
 
       {/* Bubbles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {[...Array(6)].map((_, i) => (
           <div
             key={i}
-            className="absolute rounded-full bg-blue-200 opacity-40 animate-bubble"
+            className="absolute rounded-full bg-blue-200 opacity-40"
             style={{
               left: `${10 + Math.random() * 80}%`,
               width: `${2 + Math.random() * 4}px`,
               height: `${2 + Math.random() * 4}px`,
               bottom: "-10px",
-              animationDuration: `${4 + Math.random() * 6}s`,
+              animation: "bubble 6s ease-in-out infinite",
               animationDelay: `${i * 0.5}s`,
             }}
-          ></div>
+          />
         ))}
       </div>
 
-      {/* Marine SVG creatures (inside navbar only) */}
+      {/* Marine SVG creatures */}
       <div className="absolute inset-0 pointer-events-none">
-        {/* Fish */}
-        <svg
-          className="absolute w-6 h-6 text-blue-500"
-          style={{
-            top: "40%",
-            left: "-10%",
-            animation: "swim 10s linear infinite",
-          }}
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M2 12s4-5 10-5c6 0 10 5 10 5s-4 5-10 5c-6 0-10-5-10-5z" />
-          <circle cx="8" cy="12" r="1" fill="white" />
-        </svg>
+        {/* Multiple fishes */}
+        {fishes.map((f, i) => (
+          <svg
+            key={i}
+            className="absolute"
+            style={{
+              top: f.top,
+              left: f.reverse ? "110%" : "-10%",
+              width: `${f.size}px`,
+              height: `${f.size}px`,
+              color: f.color,
+              animation: `${f.reverse ? "swim-reverse" : "swim"} ${f.duration}s linear infinite`,
+              animationDelay: `${f.delay}s`,
+              opacity: 0.9,
+              filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.08))",
+            }}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M2 12s4-5 10-5c6 0 10 5 10 5s-4 5-10 5c-6 0-10-5-10-5z" />
+            <circle cx="8" cy="12" r="1" fill="white" />
+          </svg>
+        ))}
 
-        {/* Turtle */}
+        {/* Turtle (kept) */}
         <svg
-          className="absolute w-7 h-7 text-green-500"
+          className="absolute"
           style={{
-            top: "60%",
+            top: "62%",
             left: "110%",
+            width: "22px",
+            height: "22px",
+            color: "#22c55e",
             animation: "swim-reverse 14s linear infinite",
           }}
           viewBox="0 0 24 24"
@@ -76,20 +97,7 @@ const Navbar = () => {
           <path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2" />
         </svg>
 
-        {/* Jellyfish */}
-        <svg
-          className="absolute w-5 h-5 text-pink-400"
-          style={{
-            top: "20%",
-            left: "50%",
-            animation: "floaty 6s ease-in-out infinite",
-          }}
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <circle cx="12" cy="8" r="4" />
-          <path d="M10 12v4M14 12v4M8 13v3M16 13v3" stroke="currentColor" />
-        </svg>
+        {/* jellyfish removed */}
       </div>
 
       {/* Logo */}
@@ -115,42 +123,21 @@ const Navbar = () => {
 
       <style>{`
         @keyframes bubble {
-          0% {
-            transform: translateY(0) scale(1);
-            opacity: 0.3;
-          }
-          50% {
-            opacity: 0.6;
-          }
-          100% {
-            transform: translateY(-60px) scale(1.2);
-            opacity: 0;
-          }
+          0% { transform: translateY(0) scale(1); opacity: .3; }
+          50% { opacity: .6; }
+          100% { transform: translateY(-60px) scale(1.2); opacity: 0; }
         }
         @keyframes swim {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(120%);
-          }
+          0% { transform: translateX(0); }
+          100% { transform: translateX(120%); }
         }
         @keyframes swim-reverse {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-120%);
-          }
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-120%); }
         }
         @keyframes floaty {
-          0%,
-          100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-6px);
-          }
+          0%,100% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
         }
       `}</style>
     </nav>

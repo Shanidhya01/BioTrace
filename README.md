@@ -47,6 +47,14 @@ Note: There are two copies of the stack. Prefer the root apps unless you intenti
 
 ```
 EDNA
+├─ .venv
+│  ├─ __pycache__
+│  ├─ Lib
+│  ├─ Scripts
+│  ├─ .gitignore
+│  ├─ predict_csv.py
+│  ├─ pyvenv.cfg
+│  └─ train_model.py
 ├─ .gitattributes
 ├─ .gitignore
 ├─ README.md
@@ -59,29 +67,41 @@ EDNA
 │  │  ├─ tests_post_upload.py
 │  │  ├─ tests_temp_check_root.py
 │  │  ├─ train_model.py
-│  │  └─ app
-│  │     ├─ __init__.py
-│  │     ├─ main.py
-│  │     ├─ routes.py
-│  │     ├─ utils.py
-│  │     └─ __pycache__
-│  │        ├─ __init__.cpython-311.pyc
-│  │        ├─ main.cpython-311.pyc
-│  │        ├─ routes.cpython-311.pyc
-│  │        └─ utils.cpython-311.pyc
+│  │  ├─ __pycache__
+│  │  │  ├─ app.cpython-311.pyc
+│  │  │  ├─ predict_csv.cpython-311.pyc
+│  │  │  ├─ predict_csv.cpython-313.pyc
+│  │  │  ├─ routes.cpython-311.pyc
+│  │  │  └─ utils.cpython-311.pyc
+│  │  ├─ app
+│  │  │  ├─ __init__.py
+│  │  │  ├─ main.py
+│  │  │  ├─ routes.py
+│  │  │  ├─ utils.py
+│  │  │  └─ __pycache__
+│  │  │     ├─ __init__.cpython-311.pyc
+│  │  │     ├─ __init__.cpython-313.pyc
+│  │  │     ├─ main.cpython-311.pyc
+│  │  │     ├─ main.cpython-313.pyc
+│  │  │     ├─ routes.cpython-311.pyc
+│  │  │     ├─ routes.cpython-313.pyc
+│  │  │     ├─ utils.cpython-311.pyc
+│  │  │     └─ utils.cpython-313.pyc
+│  │  ├─ data
+│  │  │  ├─ results_export.json
+│  │  │  ├─ sample_input.csv
+│  │  │  ├─ sample_output.csv
+│  │  │  └─ user_input.csv
+│  │  └─ temp
+│  │     └─ predict.csv
 │  └─ edna-frontend
 │     ├─ .gitignore
-│     ├─ .gitignore copy
 │     ├─ components.json
-│     ├─ eslint.config copy.js
 │     ├─ eslint.config.js
 │     ├─ index.html
 │     ├─ jsconfig.json
-│     ├─ package-lock copy.json
 │     ├─ package.json
-│     ├─ README copy.md
 │     ├─ README.md
-│     ├─ vite.config copy.js
 │     ├─ vite.config.js
 │     ├─ public
 │     │  └─ vite.svg
@@ -113,10 +133,27 @@ EDNA
 │        └─ pages
 │           ├─ Dashboard.jsx
 │           └─ Home.jsx
+├─ prediction_results
+│  ├─ abundance_heatmap.html
+│  ├─ network_graph.html
+│  ├─ prediction_results.csv
+│  ├─ rarefaction_curve.html
+│  ├─ results_export.json
+│  ├─ summary_report.txt
+│  └─ taxonomic_barplot.html
+├─ data
+│  ├─ fasta_parsed.csv
+│  ├─ merged_filtered_sequences.csv
+│  └─ predict.csv
 └─ processed_data
+   ├─ edna_lgb_model.txt
    ├─ feature_columns.pkl
+   ├─ feature_extractor_params.pkl
+   ├─ known_data.pkl
    ├─ label_encoder.pkl
-   └─ scaler.pkl
+   ├─ scaler.pkl
+   ├─ similarity_calculator.pkl
+   └─ taxonomy_hierarchy.pkl
 ```
 
 pip install fastapi "uvicorn[standard]" pydantic python-multipart numpy pandas scikit-learn lightgbm joblib python-dotenv
