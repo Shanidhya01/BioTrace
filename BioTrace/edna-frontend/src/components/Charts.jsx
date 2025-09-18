@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { 
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
   ResponsiveContainer, AreaChart, Area, RadarChart, Radar, PolarGrid,
-  PolarAngleAxis, PolarRadiusAxis, Treemap, ComposedChart, Scatter, ScatterChart, ZAxis,
+  PolarAngleAxis, PolarRadiusAxis, Treemap, ComposedChart, ZAxis,
   Brush, ReferenceLine, Line
 } from 'recharts';
 import html2canvas from 'html2canvas';
@@ -421,7 +421,7 @@ const Charts = ({ data: externalData }) => {
             </RadarChart>
           </ResponsiveContainer>
         );
-      case 'area':
+      // case 'area':
         return (
           <ResponsiveContainer width="100%" height={400}>
             <AreaChart data={chartData}>
@@ -476,23 +476,23 @@ const Charts = ({ data: externalData }) => {
             </Treemap>
           </ResponsiveContainer>
         );
-      case 'scatter':
-        return (
-          <ResponsiveContainer width="100%" height={400}>
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" stroke="#bfdbfe" />
-              <XAxis type="number" dataKey="count" name="Count" tick={{ fill:'#1e40af' }}/>
-              <YAxis type="number" dataKey="confidence" name="Confidence %" tick={{ fill:'#1e40af' }}/>
-              <ZAxis dataKey="size" range={[30,400]} />
-              <Tooltip content={<CustomScatterTooltip />} />
-              <Scatter data={scatterData} name="Species">
-                {scatterData.map((_,i)=><Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Scatter>
-              <ReferenceLine y={80} stroke="green" strokeDasharray="3 3" />
-              <ReferenceLine y={50} stroke="orange" strokeDasharray="3 3" />
-            </ScatterChart>
-          </ResponsiveContainer>
-        );
+      // case 'scatter':
+      //   return (
+      //     <ResponsiveContainer width="100%" height={400}>
+      //       <ScatterChart>
+      //         <CartesianGrid strokeDasharray="3 3" stroke="#bfdbfe" />
+      //         <XAxis type="number" dataKey="count" name="Count" tick={{ fill:'#1e40af' }}/>
+      //         <YAxis type="number" dataKey="confidence" name="Confidence %" tick={{ fill:'#1e40af' }}/>
+      //         <ZAxis dataKey="size" range={[30,400]} />
+      //         <Tooltip content={<CustomScatterTooltip />} />
+      //         <Scatter data={scatterData} name="Species">
+      //           {scatterData.map((_,i)=><Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+      //         </Scatter>
+      //         <ReferenceLine y={80} stroke="green" strokeDasharray="3 3" />
+      //         <ReferenceLine y={50} stroke="orange" strokeDasharray="3 3" />
+      //       </ScatterChart>
+      //     </ResponsiveContainer>
+      //   );
       case 'novelty':
         return (
           <ResponsiveContainer width="100%" height={400}>
@@ -599,15 +599,27 @@ const Charts = ({ data: externalData }) => {
         </div>
       </div>
 
-      {/* Chart type selector */}
-      <div className="mb-5 flex flex-wrap gap-1 border rounded-lg overflow-hidden border-blue-200">
-        {['default','pie','area','radar','confidence','treemap','scatter','novelty','trend'].map(t => (
-          <button key={t}
-                  onClick={()=>setChartType(t)}
-                  className={`text-xs px-3 py-2 ${chartType===t? 'bg-blue-100 text-blue-800':'bg-white hover:bg-gray-50'}`}>
-            {t.charAt(0).toUpperCase()+t.slice(1)}
-          </button>
-        ))}
+      {/* Chart type selector (segmented control) */}
+      <div className="mb-5">
+        <div className="inline-flex flex-wrap items-center rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 p-1 shadow-inner">
+          {['default','pie','radar','confidence','treemap','novelty','trend'].map(t => {
+            const active = chartType === t;
+            return (
+              <button
+                key={t}
+                onClick={() => setChartType(t)}
+                aria-pressed={active}
+                className={`text-xs font-medium px-3 py-2 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                  active
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-blue-700/80 hover:bg-blue-50'
+                }`}
+              >
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div ref={chartRef}
@@ -619,9 +631,7 @@ const Charts = ({ data: externalData }) => {
                 confidence:'Confidence Distribution',
                 radar:'Species Radar Analysis',
                 pie:'Species Distribution',
-                area:'Species Area Distribution',
                 treemap:'Species Proportion Treemap',
-                scatter:'Count vs Confidence',
                 novelty:'Novel vs Known Species',
                 trend:'Temporal Trends (Synthetic)'
               }[chartType] || 'Top Species Breakdown'
@@ -661,7 +671,7 @@ const Charts = ({ data: externalData }) => {
       )}
 
       <div className="flex justify-between items-center text-xs text-gray-500 mt-4">
-        <span>Click legend items to toggle series</span>
+        <span></span>
         <span className="text-blue-500">Data as of {new Date().toLocaleDateString()}</span>
       </div>
     </div>
