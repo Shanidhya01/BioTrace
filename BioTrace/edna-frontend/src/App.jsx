@@ -4,7 +4,6 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Navbar from "./components/Navbar";
 import "./index.css"
-import ResultsPage from "./pages/ResultsPage";
 
 function App() {
   return (
@@ -13,7 +12,6 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/results-page" element={<ResultsPage />} />
       </Routes>
     </Router>
   );
