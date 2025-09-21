@@ -288,7 +288,7 @@ const Charts = ({ data: externalData }) => {
 
       // Helper: sanitize any unsupported color functions
       const sanitizeColorFns = (str) =>
-        str.replace(/(oklab|oklch|lch|lab)\([^)]*\)/gi, "#3b82f6");
+        str.replace(/(oklab|oklch|lch|lab)\([^)]*\)/gi, "#ffffff");
 
       // Inline computed styles to detach from original class rules
       const originalNodes = src.querySelectorAll("*");
