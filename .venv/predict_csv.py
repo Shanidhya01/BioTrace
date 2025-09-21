@@ -556,21 +556,48 @@ def predict_csv(input_csv, output_dir="prediction_results", model_dir="processed
         
         return filtered
     
+    # NEW: Build Top-3 list for exact matches:
+    EXCLUDE_KEYWORDS = ['uncultured', 'unknown', 'unidentified', 'Uncultured', 'Unknown', 'Unidentified']
+
+    def build_top_predictions_for_exact(exact_species, query_seq, query_features, others_needed=2):
+        """
+        First item is the exact species at 100%.
+        Next items are closest different species by combined similarity.
+        """
+        # Look farther than top 3 to find good alternatives
+        raw_matches = similarity_calc.find_top_matches(query_seq, query_features, top_n=100)
+
+        # Aggregate by species (best similarity per species), excluding the exact species
+        best_by_species = {}
+        for m in raw_matches:
+            sp = m['species']
+            if sp == exact_species:
+                continue
+            if any(k in sp for k in EXCLUDE_KEYWORDS):
+                continue
+            best_by_species[sp] = max(best_by_species.get(sp, 0.0), float(m['similarity']))
+
+        # Sort by similarity and take the top N other species
+        other_species = sorted(best_by_species.items(), key=lambda x: x[1], reverse=True)[:others_needed]
+
+        top_preds = [{'species': exact_species, 'confidence': 1.0}]
+        for sp, sim in other_species:
+            top_preds.append({'species': sp, 'confidence': sim / 100.0})
+        return top_preds
+
     for i, (seq, sample_id, pred_species_name, probs, features) in enumerate(zip(sequences, sample_ids, predicted_species_names, preds_prob, X)):
         # FIRST: Check for exact matches in the original training data CSV
         exact_training_match = preprocessor.find_exact_match_in_training_data(seq)
         
         if exact_training_match is not None:
-            # exact_training_match is a dict like {"sequence": ..., "species": ...}
             species_name = (
                 exact_training_match.get("species")
                 or exact_training_match.get("label")
                 or pred_species_name
             )
 
-            # Find top similar sequences for display (filtered to quality species only)
-            top_matches = similarity_calc.find_top_matches(seq, features, top_n=10)
-            filtered_top_matches = filter_quality_similarity_matches(top_matches, top_n=3)
+            # CHANGED: Top-3 list includes exact species (100%) + 2 closest other species
+            top_predictions = build_top_predictions_for_exact(species_name, seq, features, others_needed=2)
 
             result = {
                 'sequence_id': f"ASV_{i+1:04d}",
@@ -582,7 +609,7 @@ def predict_csv(input_csv, output_dir="prediction_results", model_dir="processed
                 'status': 'known',
                 'exact_match': True,
                 'match_source': 'direct_training_data_lookup',
-                'top_predictions': filtered_top_matches
+                'top_predictions': top_predictions
             }
 
             # Add taxonomy if available
@@ -605,12 +632,10 @@ def predict_csv(input_csv, output_dir="prediction_results", model_dir="processed
                 })
         
         if exact_matches:
-            # Exact match found in processed data
             best_match = exact_matches[0]
             
-            # Find top similar sequences for display (filtered to quality species only)
-            top_matches = similarity_calc.find_top_matches(seq, features, top_n=10)
-            filtered_top_matches = filter_quality_similarity_matches(top_matches, top_n=3)
+            # CHANGED: Exact species (100%) + 2 closest other species
+            top_predictions = build_top_predictions_for_exact(best_match['species'], seq, features, others_needed=2)
             
             result = {
                 'sequence_id': f"ASV_{i+1:04d}",
@@ -622,7 +647,7 @@ def predict_csv(input_csv, output_dir="prediction_results", model_dir="processed
                 'status': 'known',
                 'exact_match': True,
                 'match_source': 'processed_data_lookup',
-                'top_predictions': filtered_top_matches
+                'top_predictions': top_predictions
             }
             
             if preprocessor.taxonomy_hierarchy and best_match['species'] in preprocessor.taxonomy_hierarchy:
@@ -630,7 +655,6 @@ def predict_csv(input_csv, output_dir="prediction_results", model_dir="processed
                 
             results.append(result)
             continue
-        
         # THIRD: Find similar sequences for non-exact matches
         top_matches = similarity_calc.find_top_matches(seq, features, top_n=10)
         filtered_top_matches = filter_quality_similarity_matches(top_matches, top_n=3)
